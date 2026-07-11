@@ -96,3 +96,11 @@ Grafik time series brightness temperature (band B10) Kota Bekasi dari tahun 2015
 ## Konteks akademik
 
 Disusun sebagai bagian studi Teknik Geodesi, Universitas Diponegoro, dalam kajian pemantauan suhu permukaan perkotaan menggunakan data penginderaan jauh dan platform cloud computing Google Earth Engine.
+
+Daftar pustaka
+
+Cardille, J. A., Crowley, M. A., Saah, D., & Clinton, N. E. (Eds.). (2024). Cloud-based remote sensing with Google Earth Engine: Fundamentals and applications. Springer.
+
+Huda, M. N., Rizqullah, R. S., Chairil, A., Pratiwi, D. A., Amatullah, A., Pure, I., Aji, M. P., & Irawan, L. Y. (2026). Analisis distribusi Land Surface Temperature (LST) tahun 2025 menggunakan Google Earth Engine di Kabupaten Jepara. JATI (Jurnal Mahasiswa Teknik Informatika), 10(3), 5391.
+
+Wu, Q. (2020). geemap: A Python package for interactive mapping with Google Earth Engine. Journal of Open Source Software, 5(51), 2305. https://doi.org/10.21105/joss.02305
