@@ -7,7 +7,7 @@ WebGIS interaktif untuk memantau dan menganalisis Land Surface Temperature (LST)
 Proyek ini menghitung dan memvisualisasikan suhu permukaan (Land Surface Temperature) Kota Bekasi menggunakan citra satelit Landsat 8, dilengkapi dengan citra true color Landsat 8 dan Sentinel-2 sebagai pembanding visual. Peta bersifat interaktif — pengguna dapat mengganti tahun tampilan, menyalakan/mematikan layer, melihat statistik area, serta mengklik lokasi tertentu di peta untuk melihat data suhu dan reflektansi secara detail.
 
 ## Link Akses
-[text](https://windy-nation-484911-g8.projects.earthengine.app/view/webgis-lst-kota-bekasi)
+[WebGIS LST Kota Bekasi](https://windy-nation-484911-g8.projects.earthengine.app/view/webgis-lst-kota-bekasi)
 
 ## Fitur utama
 
