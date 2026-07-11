@@ -87,6 +87,9 @@ Grafik time series brightness temperature (band B10) Kota Bekasi dari tahun 2015
 6. Klik lokasi mana pun di peta untuk melihat detail LST dan reflektansi pada titik tersebut.
 7. Lihat grafik tren brightness temperature di panel Console.
 
+## Visualisasi 
+![alt text](image.png)
+
 ## Keterbatasan
 
 - Nilai LST dapat kurang akurat pada piksel yang tertutup awan meski sudah dilakukan masking, karena composite median tahunan bergantung pada ketersediaan citra bersih pada tahun tersebut.
