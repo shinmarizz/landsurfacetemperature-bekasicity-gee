@@ -88,7 +88,7 @@ Grafik time series brightness temperature (band B10) Kota Bekasi dari tahun 2015
 7. Lihat grafik tren brightness temperature di panel Console.
 
 ## Visualisasi 
-![Homepage](images/homepage.png)
+![Homepage](image.png)
 
 Tampilan di atas menunjukkan layer LST tahun 2018, lengkap dengan panel kontrol layer (kiri atas), legenda gradien suhu (kiri bawah), panel informasi proyek (kanan atas), dan panel hasil klik peta yang menampilkan LST beserta nilai reflektansi TOA pada titik yang dipilih (kanan bawah).
 
