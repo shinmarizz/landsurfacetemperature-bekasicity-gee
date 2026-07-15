@@ -1,94 +1,110 @@
-# WebGIS LST Kota Bekasi (2015–2025)
-
-WebGIS interaktif untuk memantau dan menganalisis Land Surface Temperature (LST) Kota Bekasi dari tahun 2015 hingga 2025, dibangun menggunakan Google Earth Engine (GEE) JavaScript API.
-
-## Deskripsi
-
-Proyek ini menghitung dan memvisualisasikan suhu permukaan (Land Surface Temperature) Kota Bekasi menggunakan citra satelit Landsat 8, dilengkapi dengan citra true color Landsat 8 dan Sentinel-2 sebagai pembanding visual. Peta bersifat interaktif — pengguna dapat mengganti tahun tampilan, menyalakan/mematikan layer, melihat statistik area, serta mengklik lokasi tertentu di peta untuk melihat data suhu dan reflektansi secara detail.
+# WebGIS Analisis Land Surface Temperature (LST) Kota Bekasi
 
 ## Link Akses
 [WebGIS LST Kota Bekasi](https://windy-nation-484911-g8.projects.earthengine.app/view/webgis-lst-kota-bekasi)
 
-## Fitur utama
+Peta interaktif berbasis Google Earth Engine (GEE) untuk memantau dan menganalisis tren **Land Surface Temperature (LST)** Kota Bekasi periode **2015–2025**, dilengkapi visual True Color, grafik tren, statistik per tahun, dan informasi titik interaktif.
 
-### 1. Layer LST per tahun (2015–2025)
-Land Surface Temperature dihitung untuk setiap tahun dari citra Landsat 8, ditampilkan dengan skema warna gradien (biru = suhu rendah, merah = suhu tinggi).
+Disusun oleh **Adnan Yusuf Hartawan**, Teknik Geodesi, Universitas Diponegoro.
 
-### 2. Layer True Color
-- **Landsat 8 True Color** — komposit RGB (B4, B3, B2) per tahun, mengikuti tahun yang sama dengan LST.
-- **Sentinel-2 True Color** — citra resolusi lebih tinggi sebagai referensi visual tambahan.
+---
 
-### 3. Slider tahun
-Menggeser slider akan otomatis mengganti tampilan layer True Color dan LST ke tahun yang dipilih, tanpa perlu menjalankan ulang skrip.
+## Ringkasan Proyek
 
-### 4. Panel kontrol layer
-Checkbox untuk menyalakan/mematikan setiap jenis layer secara independen:
-- Sentinel-2 True Color
-- Landsat 8 True Color
-- Landsat 8 LST
+Proyek ini membangun aplikasi peta interaktif (GEE App/Script) untuk:
+- Memvisualisasikan citra satelit True Color dan LST Kota Bekasi dari tahun ke tahun.
+- Menghitung dan menampilkan statistik LST (min, maks, rata-rata) tahunan.
+- Menampilkan tren LST 2015–2025 dalam bentuk grafik time series.
+- Memungkinkan eksplorasi nilai reflektansi & suhu permukaan pada titik lokasi tertentu secara langsung di peta.
 
-### 5. Legenda LST
-Legenda dengan gradien warna kontinu beserta label suhu minimum, tengah, dan maksimum (skala 20°C–40°C), termasuk keterangan sumber citra yang digunakan.
+---
 
-### 6. Panel informasi proyek
-Panel di sisi kanan peta yang menjelaskan tujuan proyek, ringkasan metodologi perhitungan LST, sumber data, serta statistik suhu (minimum, maksimum, rata-rata) yang otomatis diperbarui sesuai tahun yang aktif di slider.
+## Sumber Data
 
-### 7. Informasi klik peta
-Mengklik titik mana pun di peta akan menampilkan panel informasi berisi:
-- Koordinat lokasi (lintang, bujur)
-- Nilai LST (°C) pada titik tersebut
-- Nilai reflektansi TOA untuk band B2 (biru), B3 (hijau), B4 (merah), B5 (NIR), B6 (SWIR 1), dan B7 (SWIR 2)
-- Tahun data mengikuti posisi slider yang sedang aktif
-
-### 8. Grafik tren
-Grafik time series brightness temperature (band B10) Kota Bekasi dari tahun 2015 sampai 2025, menampilkan pola kecenderungan suhu dari waktu ke waktu.
-
-## Metodologi perhitungan LST
-
-1. Citra Landsat 8 Collection 2 (SR) difilter berdasarkan wilayah kajian (`geometry`) dan tutupan awan di bawah 20%, lalu di-composite menggunakan median per tahun.
-2. Piksel awan, bayangan awan, dan sirus dimasking menggunakan band `QA_PIXEL`.
-3. NDVI dihitung dari band NIR (B5) dan Merah (B4) untuk menentukan proporsi vegetasi (PV).
-4. Emisivitas permukaan diestimasi dari nilai PV.
-5. Brightness temperature diambil dari band termal (B10), kemudian dikoreksi menggunakan emisivitas untuk menghasilkan nilai LST dalam derajat Celsius.
-
-## Sumber data
-
-| Sumber | Kegunaan | Resolusi |
+| Data | Sumber | Kegunaan |
 |---|---|---|
-| Landsat 8 Collection 2 (T1_TOA) | True Color, perhitungan LST | 30 m (termal diresampel dari 100 m) |
-| Sentinel-2 SR Harmonized | True Color referensi | 10 m |
+| Landsat 8 Collection 2 Level-2 (SR/ST) | `LANDSAT/LC08/C02/T1_L2` (USGS) | True Color & perhitungan LST |
+| Sentinel-2 Surface Reflectance Harmonized | `COPERNICUS/S2_SR_HARMONIZED` | True Color pembanding tahun 2024 |
+| Batas Administrasi Kota Bekasi | `FAO/GAUL/2015/level2` | Wilayah studi (clip/crop) |
 
-## Struktur kode
+---
+
+## Metodologi
+
+1. **Batas wilayah studi**
+   Batas administrasi Kota Bekasi diambil dari dataset **FAO GAUL 2015 Level 2**, difilter berdasarkan `ADM1_NAME = 'Jawa Barat'` dan `ADM2_NAME = 'Kota Bekasi'`. Seluruh proses filter citra, clipping, dan perhitungan statistik menggunakan batas ini sebagai `geometry`.
+
+   > ⚠️ FAO GAUL tidak selalu konsisten membedakan prefix "Kota"/"Kabupaten". Skrip menyertakan langkah verifikasi (`print`) untuk mengecek penamaan sebelum filter final digunakan.
+
+2. **Pra-pemrosesan citra Landsat 8 SR**
+   - Filter citra berdasarkan `CLOUD_COVER < 20%`.
+   - Masking awan, bayangan awan, dan cirrus menggunakan band `QA_PIXEL`.
+   - Penerapan *scale factor* resmi USGS pada band reflektansi (`SR_B*`) dan band termal (`ST_B10`), karena Collection 2 Level-2 disimpan dalam bentuk integer.
+   - Komposit **median** dibentuk per tahun untuk mengurangi noise dan gangguan awan residual.
+
+3. **Perhitungan LST**
+   LST dihitung langsung dari band **`ST_B10`** (produk *Surface Temperature* resmi USGS), yang sudah terkoreksi:
+   - Emisivitas permukaan (menggunakan data ASTER GED),
+   - Efek atmosfer.
+
+   Formula konversi ke Celsius:
+   ```
+   LST (°C) = (ST_B10 × 0.00341802 + 149.0) − 273.15
+   ```
+
+   Pendekatan ini dipilih untuk menggantikan metode manual (brightness temperature TOA + NDVI-emisivitas) karena lebih akurat dan sesuai rekomendasi terbaru USGS.
+
+4. **Mode komposit musim**
+   Tersedia dua mode komposit untuk mengakomodasi variasi musim tropis:
+   - **Tahun Penuh (Jan–Des)** — representasi rata-rata kondisi sepanjang tahun.
+   - **Musim Kemarau (Jun–Sep)** — mengurangi pengaruh variasi musim hujan/kemarau agar perbandingan antar-tahun lebih konsisten (apple-to-apple).
+
+5. **Kontrol kualitas data**
+   Skrip mencetak **jumlah citra valid per tahun** (Jan-Des maupun Jun-Sep) ke Console sebagai indikator keandalan komposit — komposit dari sedikit citra (mis. 1–2 scene) lebih rentan noise dan kurang representatif dibanding komposit dari banyak citra.
+
+---
+
+## Fitur Aplikasi
+
+- **Panel Kontrol** (kiri atas): toggle layer Sentinel-2, True Color, LST, mode komposit musim, dan slider pemilihan tahun (2015–2025).
+- **Legenda LST** (kiri bawah): skala warna suhu permukaan (20–40 °C).
+- **Panel Informasi** (kanan atas): deskripsi proyek, metodologi, sumber data, dan statistik LST tahun aktif (min, maks, rata-rata).
+- **Grafik Tren** (Console): time series LST Kota Bekasi 2015–2025.
+- **Info Titik Interaktif** (klik di peta, kanan bawah): menampilkan LST dan reflektansi permukaan (band SR) pada koordinat yang diklik, sesuai tahun & mode musim aktif.
+
+---
+
+## Keterbatasan & Catatan Penting
+
+- **Resolusi termal**: band `ST_B10` didistribusikan pada 30 m, namun resolusi asli sensor TIRS adalah 100 m — nilai LST per piksel dapat merupakan campuran (*mixed pixel*) beberapa jenis tutupan lahan pada area urban heterogen seperti Bekasi.
+- **Ketersediaan citra tidak seragam**: jumlah citra bebas awan per tahun bervariasi (lihat output Console), sehingga kualitas komposit antar-tahun tidak selalu setara.
+- **Model emisivitas ST_B10** berbasis ASTER GED (kalibrasi global), belum divalidasi khusus untuk karakteristik urban tropis Indonesia.
+- **Batas administrasi FAO GAUL 2015** merupakan generalisasi global; untuk kebutuhan analisis spasial presisi tinggi, disarankan memakai batas resmi (mis. BIG/Kemendagri).
+- **Sentinel-2** hanya digunakan sebagai pembanding visual True Color tahun 2024, bukan bagian dari analisis tren kuantitatif LST.
+- Disarankan melakukan validasi LST dengan data suhu udara in-situ (mis. BMKG) sebagai *sanity check*, serta uji korelasi LST terhadap NDVI/NDBI untuk memperkuat interpretasi urban heat island.
+
+---
+
+## Cara Menjalankan
+
+1. Buka [Google Earth Engine Code Editor](https://code.earthengine.google.com/).
+2. Salin isi skrip (`webgis_lst_bekasi_SR.js`) ke editor.
+3. Jalankan (klik **Run**).
+4. Cek Console untuk:
+   - Verifikasi penamaan wilayah "Bekasi" di FAO GAUL.
+   - Jumlah citra valid per tahun.
+   - Grafik tren LST.
+5. Gunakan panel kontrol di peta untuk memilih tahun, mode musim, dan layer yang ditampilkan.
+6. Klik di area manapun pada peta untuk melihat detail LST dan reflektansi di titik tersebut.
+
+---
+
+## Struktur File
 
 ```
-├── Fungsi masking awan
-│   ├── maskL8sr()      → masking awan Landsat 8 (QA_PIXEL)
-│   └── maskS2clouds()  → masking awan Sentinel-2 (QA60)
-├── Fungsi pengolahan citra
-│   ├── ambilCitraTahun(tahun)  → composite median Landsat per tahun
-│   └── hitungLST(dataset)      → NDVI → emisivitas → LST
-├── Layer peta
-│   ├── l8TrueColorLayers{tahun} → True Color per tahun (2015-2025)
-│   ├── lstLayers{tahun}         → LST per tahun (2015-2025)
-│   └── sentinelLayer            → Sentinel-2 True Color
-├── UI Panel
-│   ├── controlPanel     → checkbox layer + slider tahun (top-left)
-│   ├── legend           → gradien warna LST (bottom-left)
-│   ├── infoPanel        → deskripsi proyek + statistik (top-right)
-│   └── clickInfoPanel   → hasil klik peta (bottom-right)
-└── Grafik
-    └── ui.Chart.image.series → tren brightness temperature 2015-2025
+webgis_lst_bekasi_SR.js   → Skrip utama Google Earth Engine
+README.md                 → Dokumentasi proyek ini
 ```
-
-## Cara penggunaan
-
-1. Buka skrip di [Google Earth Engine Code Editor](https://code.earthengine.google.com/).
-2. Pastikan variabel `geometry` sudah diatur ke batas wilayah Kota Bekasi (import sebagai asset atau gambar manual di peta).
-3. Klik **Run**.
-4. Gunakan slider di panel kiri atas untuk memilih tahun (2015–2025).
-5. Gunakan checkbox untuk menampilkan/menyembunyikan layer sesuai kebutuhan.
-6. Klik lokasi mana pun di peta untuk melihat detail LST dan reflektansi pada titik tersebut.
-7. Lihat grafik tren brightness temperature di panel Console.
 
 ## Visualisasi 
 ![Homepage](image.png)
