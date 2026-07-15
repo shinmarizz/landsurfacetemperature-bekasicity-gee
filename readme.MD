@@ -45,7 +45,7 @@ Grafik time series brightness temperature (band B10) Kota Bekasi dari tahun 2015
 
 ## Metodologi perhitungan LST
 
-1. Citra Landsat 8 Collection 2 (T1_TOA) difilter berdasarkan wilayah kajian (`geometry`) dan tutupan awan di bawah 20%, lalu di-composite menggunakan median per tahun.
+1. Citra Landsat 8 Collection 2 (SR) difilter berdasarkan wilayah kajian (`geometry`) dan tutupan awan di bawah 20%, lalu di-composite menggunakan median per tahun.
 2. Piksel awan, bayangan awan, dan sirus dimasking menggunakan band `QA_PIXEL`.
 3. NDVI dihitung dari band NIR (B5) dan Merah (B4) untuk menentukan proporsi vegetasi (PV).
 4. Emisivitas permukaan diestimasi dari nilai PV.
