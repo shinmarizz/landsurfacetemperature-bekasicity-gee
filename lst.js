@@ -1,3 +1,40 @@
+// ============================================================
+// WebGIS LST Kota Bekasi 2015-2025
+// Versi: Landsat 8 Collection 2 Level-2 (Surface Reflectance)
+// LST dihitung dari band ST_B10 (Surface Temperature product resmi USGS,
+// sudah terkoreksi emisivitas menggunakan ASTER GED)
+// ============================================================
+
+// -------------------- BATAS ADMINISTRASI: FAO GAUL --------------------
+// Menggunakan FAO GAUL 2015 Level 2 sebagai sumber batas wilayah studi
+// (menggantikan asset geometry gambar manual).
+var gaulLevel2 = ee.FeatureCollection('FAO/GAUL/2015/level2');
+
+// Langkah verifikasi (jalankan sekali, cek di Console):
+// FAO GAUL sering tidak konsisten memakai prefix "Kota"/"Kabupaten",
+// jadi cek dulu semua fitur yang mengandung kata "Bekasi" sebelum fix nama final.
+var cekBekasi = gaulLevel2.filter(ee.Filter.stringContains('ADM2_NAME', 'Bekasi'));
+print('Cek penamaan wilayah "Bekasi" di FAO GAUL:', cekBekasi);
+
+// Ambil khusus Kota Bekasi (bukan Kabupaten Bekasi).
+// Jika print di atas menunjukkan nama berbeda (mis. hanya "Bekasi" tanpa
+// prefix "Kota"), sesuaikan filter ADM2_NAME di bawah ini, atau filter
+// berdasarkan ADM2_CODE yang muncul pada hasil print supaya lebih pasti.
+var kotaBekasi = gaulLevel2.filter(
+  ee.Filter.and(
+    ee.Filter.eq('ADM1_NAME', 'Jawa Barat'),
+    ee.Filter.eq('ADM2_NAME', 'Kota Bekasi')
+  )
+);
+
+// geometry di sini menggantikan variabel geometry manual yang dipakai
+// di seluruh bagian script (filterBounds, clip, reduceRegion, dll).
+var geometry = kotaBekasi.geometry();
+
+Map.addLayer(kotaBekasi, {color: 'FF0000'}, 'Batas Kota Bekasi (FAO GAUL)', false);
+
+// -------------------- MASKING AWAN --------------------
+// Bit position sama untuk QA_PIXEL Collection 2 (TOA maupun L2/SR)
 function maskL8sr(citra) {
   var qa = citra.select('QA_PIXEL');
   var cloudBitMask = 1 << 3;
@@ -9,6 +46,16 @@ function maskL8sr(citra) {
     .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
 
   return citra.updateMask(mask);
+}
+
+// -------------------- SCALE FACTOR SR/ST --------------------
+// Wajib untuk Collection 2 Level-2: band optik (SR_B*) dan termal (ST_B10)
+// disimpan dalam bentuk integer sehingga perlu dikonversi ke nilai fisik.
+function applyScaleFactors(citra) {
+  var opticalBands = citra.select('SR_B.').multiply(0.0000275).add(-0.2);
+  var thermalBand = citra.select('ST_B10').multiply(0.00341802).add(149.0);
+  return citra.addBands(opticalBands, null, true)
+              .addBands(thermalBand, null, true);
 }
 
 function maskS2clouds(citra) {
@@ -24,7 +71,7 @@ function maskS2clouds(citra) {
 
 var lstVis = {
   min: 20,
-  max: 40,
+  max: 50,
   palette: [
     '040274','040281','0502a3','0502b8','0502ce','0502e6',
     '0602ff','235cb1','307ef3','269db1','30c8e2','32d3ef',
@@ -34,8 +81,9 @@ var lstVis = {
   ]
 };
 
+// Nama band berubah menjadi SR_B4, SR_B3, SR_B2 pada Collection 2 Level-2
 var l8Vis = {
-  bands: ['B4', 'B3', 'B2'],
+  bands: ['SR_B4', 'SR_B3', 'SR_B2'],
   min: 0,
   max: 0.3,
   gamma: [1.1, 1.1, 1]
@@ -48,71 +96,86 @@ var s2Vis = {
   gamma: 1.1
 };
 
-function ambilCitraTahun(tahun) {
-  var startDate = tahun + '-01-01';
-  var endDate = tahun + '-12-31';
+// -------------------- AMBIL CITRA TAHUNAN (SR) --------------------
+// mode: 'penuh' = Januari-Desember, 'kemarau' = Juni-September
+// Musim kemarau dipakai supaya perbandingan LST antar-tahun lebih
+// apple-to-apple (tidak tercampur variasi musim hujan/kemarau).
+function ambilKoleksiTahun(tahun, mode) {
+  var startDate, endDate;
+  if (mode === 'kemarau') {
+    startDate = tahun + '-06-01';
+    endDate = tahun + '-10-01';
+  } else {
+    startDate = tahun + '-01-01';
+    endDate = tahun + '-12-31';
+  }
 
-  return ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA')
+  return ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
     .filterBounds(geometry)
     .filterDate(startDate, endDate)
-    .filter(ee.Filter.lt('CLOUD_COVER', 20))
+    .filter(ee.Filter.lt('CLOUD_COVER', 20));
+}
+
+function ambilCitraTahun(tahun, mode) {
+  return ambilKoleksiTahun(tahun, mode)
     .map(maskL8sr)
+    .map(applyScaleFactors)
     .median()
     .clip(geometry);
 }
 
+// -------------------- CEK JUMLAH CITRA VALID PER TAHUN --------------------
+// Median dari sedikit citra (mis. 2-3 scene) jauh lebih noisy/tidak
+// representatif dibanding median dari banyak citra. Ini penting dicatat
+// sebagai bagian kualitas data pada laporan/skripsi.
+print('=== Jumlah citra Landsat 8 SR valid per tahun (CLOUD_COVER < 20%) ===');
+var daftarTahunUntukCek = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+daftarTahunUntukCek.forEach(function(tahun) {
+  var jumlahPenuh = ambilKoleksiTahun(tahun, 'penuh').size();
+  var jumlahKemarau = ambilKoleksiTahun(tahun, 'kemarau').size();
+  print(
+    'Tahun ' + tahun + ' -> Jan-Des: ', jumlahPenuh,
+    ' | Jun-Sep (kemarau): ', jumlahKemarau
+  );
+});
+
+// -------------------- HITUNG LST DARI PRODUK ST_B10 --------------------
+// ST_B10 pada Collection 2 Level-2 sudah berupa Surface Temperature (Kelvin)
+// hasil koreksi emisivitas resmi USGS, jadi tidak perlu lagi menghitung
+// NDVI -> PV -> emisivitas -> Planck secara manual seperti pada versi TOA.
 function hitungLST(dataset) {
-  var ndvi = dataset.normalizedDifference(['B5', 'B4']).rename('NDVI');
-
-  var ndviMin = ee.Number(ndvi.reduceRegion({
-    reducer: ee.Reducer.min(),
-    geometry: geometry,
-    scale: 30,
-    maxPixels: 1e9
-  }).values().get(0));
-
-  var ndviMax = ee.Number(ndvi.reduceRegion({
-    reducer: ee.Reducer.max(),
-    geometry: geometry,
-    scale: 30,
-    maxPixels: 1e9
-  }).values().get(0));
-
-  var pv = ndvi.subtract(ndviMin)
-    .divide(ndviMax.subtract(ndviMin))
-    .pow(2)
-    .rename('PV');
-
-  var emissivity = pv.multiply(0.004).add(0.986).rename('EMISSIVITY');
-
-  var brightnessTemp = dataset.select('B10').rename('BT_KELVIN');
-
-  var lst = brightnessTemp.expression(
-    '(BT / (1 + (0.00115 * (BT / 1.4388)) * log(e))) - 273.15', {
-      'BT': brightnessTemp,
-      'e': emissivity
-    }).rename('LST_CELSIUS');
-
-  return lst;
+  var lstKelvin = dataset.select('ST_B10');
+  var lstCelsius = lstKelvin.subtract(273.15).rename('LST_CELSIUS');
+  return lstCelsius;
 }
 
 var daftarTahun = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 var tahunAktif = 2018;
+var modeMusim = 'penuh'; // 'penuh' (Jan-Des) atau 'kemarau' (Jun-Sep)
 
-var l8TrueColorLayers = {};
-var lstLayers = {};
+// Dictionary bersarang: l8TrueColorLayers[mode][tahun]
+var l8TrueColorLayers = {penuh: {}, kemarau: {}};
+var lstLayers = {penuh: {}, kemarau: {}};
 
-daftarTahun.forEach(function(tahun) {
-  var citraTahun = ambilCitraTahun(tahun);
-  var lstTahun = hitungLST(citraTahun);
+['penuh', 'kemarau'].forEach(function(mode) {
+  daftarTahun.forEach(function(tahun) {
+    var citraTahun = ambilCitraTahun(tahun, mode);
+    var lstTahun = hitungLST(citraTahun);
 
-  var tampilkan = (tahun === tahunAktif); // hanya tahun aktif yang langsung tampil
+    // Hanya tahun aktif + mode aktif yang langsung tampil di awal
+    var tampilkan = (tahun === tahunAktif && mode === modeMusim);
 
-  var layerTrueColor = Map.addLayer(citraTahun, l8Vis, 'Landsat 8 True Color ' + tahun, tampilkan);
-  var layerLST = Map.addLayer(lstTahun, lstVis, 'LST (°C) ' + tahun, tampilkan);
+    var labelMode = (mode === 'kemarau') ? ' [Kemarau]' : ' [Tahun Penuh]';
+    var layerTrueColor = Map.addLayer(
+      citraTahun, l8Vis, 'Landsat 8 SR True Color ' + tahun + labelMode, tampilkan
+    );
+    var layerLST = Map.addLayer(
+      lstTahun, lstVis, 'LST (°C) ' + tahun + labelMode, tampilkan
+    );
 
-  l8TrueColorLayers[tahun] = layerTrueColor;
-  lstLayers[tahun] = layerLST;
+    l8TrueColorLayers[mode][tahun] = layerTrueColor;
+    lstLayers[mode][tahun] = layerLST;
+  });
 });
 
 var sentinelDataset = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
@@ -153,7 +216,7 @@ controlPanel.add(checkboxSentinel);
 
 controlPanel.add(ui.Label('', {margin: '4px 0'})); // spasi
 
-controlPanel.add(ui.Label('Landsat 8 per tahun', {
+controlPanel.add(ui.Label('Landsat 8 SR per tahun', {
   fontWeight: 'bold',
   fontSize: '13px',
   margin: '6px 0 2px 0'
@@ -167,7 +230,7 @@ var checkboxTrueColor = ui.Checkbox({
   value: true,
   onChange: function(checked) {
     tampilkanTrueColor = checked;
-    l8TrueColorLayers[yearSlider.getValue()].setShown(checked);
+    l8TrueColorLayers[modeMusim][yearSlider.getValue()].setShown(checked);
   }
 });
 
@@ -176,12 +239,42 @@ var checkboxLSTLayer = ui.Checkbox({
   value: true,
   onChange: function(checked) {
     tampilkanLST = checked;
-    lstLayers[yearSlider.getValue()].setShown(checked);
+    lstLayers[modeMusim][yearSlider.getValue()].setShown(checked);
   }
 });
 
 controlPanel.add(checkboxTrueColor);
 controlPanel.add(checkboxLSTLayer);
+
+controlPanel.add(ui.Label('', {margin: '4px 0'})); // spasi
+
+controlPanel.add(ui.Label('Mode komposit', {
+  fontWeight: 'bold',
+  fontSize: '13px',
+  margin: '6px 0 2px 0'
+}));
+
+var checkboxMusimKemarau = ui.Checkbox({
+  label: 'Pakai musim kemarau (Jun-Sep)',
+  value: false,
+  onChange: function(checked) {
+    var modeSebelumnya = modeMusim;
+    modeMusim = checked ? 'kemarau' : 'penuh';
+
+    var tahunTerpilih = yearSlider.getValue();
+
+    // Matikan layer mode sebelumnya untuk tahun yang sedang aktif
+    l8TrueColorLayers[modeSebelumnya][tahunTerpilih].setShown(false);
+    lstLayers[modeSebelumnya][tahunTerpilih].setShown(false);
+
+    // Nyalakan layer mode baru sesuai status checkbox True Color / LST
+    l8TrueColorLayers[modeMusim][tahunTerpilih].setShown(tampilkanTrueColor);
+    lstLayers[modeMusim][tahunTerpilih].setShown(tampilkanLST);
+
+    updateStatistik(tahunTerpilih);
+  }
+});
+controlPanel.add(checkboxMusimKemarau);
 
 var yearLabel = ui.Label('Menampilkan tahun: ' + tahunAktif, {
   fontSize: '13px',
@@ -198,12 +291,15 @@ var yearSlider = ui.Slider({
 });
 
 yearSlider.onChange(function(tahunTerpilih) {
-  daftarTahun.forEach(function(tahun) {
-    var aktif = (tahun === tahunTerpilih);
-    l8TrueColorLayers[tahun].setShown(aktif && tampilkanTrueColor);
-    lstLayers[tahun].setShown(aktif && tampilkanLST);
+  ['penuh', 'kemarau'].forEach(function(mode) {
+    daftarTahun.forEach(function(tahun) {
+      var aktif = (tahun === tahunTerpilih && mode === modeMusim);
+      l8TrueColorLayers[mode][tahun].setShown(aktif && tampilkanTrueColor);
+      lstLayers[mode][tahun].setShown(aktif && tampilkanLST);
+    });
   });
   yearLabel.setValue('Menampilkan tahun: ' + tahunTerpilih);
+  updateStatistik(tahunTerpilih);
 });
 
 controlPanel.add(yearSlider);
@@ -252,7 +348,7 @@ var labelPanel = ui.Panel({
 });
 legend.add(labelPanel);
 
-legend.add(ui.Label('Sumber: Landsat 8 (True Color & LST), Sentinel-2 (True Color)', {
+legend.add(ui.Label('Sumber: Landsat 8 Collection 2 Level-2 SR (True Color & LST), Sentinel-2 (True Color)', {
   fontSize: '11px',
   color: '#5F5E5A',
   margin: '8px 0 0 0'
@@ -260,12 +356,19 @@ legend.add(ui.Label('Sumber: Landsat 8 (True Color & LST), Sentinel-2 (True Colo
 
 Map.add(legend);
 
-var lstCollection = ee.ImageCollection('LANDSAT/LC08/C02/T1_TOA')
+// -------------------- CHART TREN LST (dari ST_B10, sudah dalam °C) --------------------
+var lstCollection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
   .filterBounds(geometry)
   .filterDate('2015-01-01', '2025-12-31')
   .filter(ee.Filter.lt('CLOUD_COVER', 20))
   .map(maskL8sr)
-  .select('B10');
+  .map(function(img) {
+    var lstC = img.select('ST_B10')
+      .multiply(0.00341802).add(149.0)
+      .subtract(273.15)
+      .rename('LST_CELSIUS');
+    return lstC.copyProperties(img, ['system:time_start']);
+  });
 
 var chart = ui.Chart.image.series({
   imageCollection: lstCollection,
@@ -274,8 +377,8 @@ var chart = ui.Chart.image.series({
   scale: 30,
   xProperty: 'system:time_start'
 }).setOptions({
-  title: 'Tren Brightness Temperature 2015-2025',
-  vAxis: {title: 'Kelvin'},
+  title: 'Tren LST 2015-2025 (Landsat 8 SR - ST_B10)',
+  vAxis: {title: 'LST (°C)'},
   hAxis: {title: 'Tanggal'},
   lineWidth: 2,
   pointSize: 3
@@ -311,19 +414,31 @@ infoPanel.add(ui.Label('Metodologi', {
 }));
 
 infoPanel.add(ui.Label(
-  '1. Citra Landsat 8 (Collection 2, TOA) difilter tutupan awan < 20%, ' +
-  'lalu di-composite median per tahun.',
+  '1. Citra Landsat 8 Collection 2 Level-2 (Surface Reflectance/Surface Temperature) ' +
+  'difilter tutupan awan < 20%, lalu di-composite median per tahun.',
   {fontSize: '11px', margin: '0 0 4px 0'}
 ));
 
 infoPanel.add(ui.Label(
-  '2. NDVI dihitung untuk menentukan proporsi vegetasi (PV) dan emisivitas permukaan.',
+  '2. Band ST_B10 merupakan produk Surface Temperature resmi USGS yang sudah ' +
+  'terkoreksi emisivitas (ASTER GED) dan atmosfer.',
   {fontSize: '11px', margin: '0 0 4px 0'}
 ));
 
 infoPanel.add(ui.Label(
-  '3. Brightness temperature (band B10) dikonversi menjadi LST (°C) menggunakan ' +
-  'algoritma emisivitas-koreksi.',
+  '3. LST (°C) diperoleh dari ST_B10 x 0.00341802 + 149.0, dikurangi 273.15.',
+  {fontSize: '11px', margin: '0 0 4px 0'}
+));
+
+infoPanel.add(ui.Label(
+  '4. Tersedia mode komposit Tahun Penuh (Jan-Des) atau Musim Kemarau (Jun-Sep) ' +
+  'agar perbandingan antar-tahun tidak tercampur variasi musim hujan.',
+  {fontSize: '11px', margin: '0 0 4px 0'}
+));
+
+infoPanel.add(ui.Label(
+  '5. Jumlah citra valid per tahun (cek kualitas komposit) dapat dilihat ' +
+  'pada Console setelah script dijalankan.',
   {fontSize: '11px', margin: '0 0 10px 0'}
 ));
 
@@ -334,7 +449,7 @@ infoPanel.add(ui.Label('Sumber data', {
 }));
 
 infoPanel.add(ui.Label(
-  '• Landsat 8 Collection 2 T1_TOA (True Color & LST)',
+  '• Landsat 8 Collection 2 Level-2 (SR True Color & ST_B10 LST)',
   {fontSize: '11px', margin: '0 0 2px 0'}
 ));
 
@@ -359,7 +474,7 @@ infoPanel.add(statLabel);
 function updateStatistik(tahun) {
   statLabel.setValue('Menghitung statistik tahun ' + tahun + '...');
 
-  var lstTahunIni = lstLayers[tahun].getEeObject();
+  var lstTahunIni = lstLayers[modeMusim][tahun].getEeObject();
 
   lstTahunIni.reduceRegion({
     reducer: ee.Reducer.minMax().combine({
@@ -370,8 +485,9 @@ function updateStatistik(tahun) {
     scale: 30,
     maxPixels: 1e9
   }).evaluate(function(hasil) {
+    var labelMode = (modeMusim === 'kemarau') ? 'Musim Kemarau (Jun-Sep)' : 'Tahun Penuh (Jan-Des)';
     var teks =
-      'Tahun: ' + tahun + '\n' +
+      'Tahun: ' + tahun + ' (' + labelMode + ')\n' +
       'Min: ' + hasil.LST_CELSIUS_min.toFixed(1) + ' °C\n' +
       'Maks: ' + hasil.LST_CELSIUS_max.toFixed(1) + ' °C\n' +
       'Rata-rata: ' + hasil.LST_CELSIUS_mean.toFixed(1) + ' °C';
@@ -432,10 +548,11 @@ Map.onClick(function(coords) {
   );
   clickContentLabel.setValue('Mengambil data...');
 
-  var citraTahunIni = l8TrueColorLayers[tahunTerpilih].getEeObject();
-  var lstTahunIni = lstLayers[tahunTerpilih].getEeObject();
+  var citraTahunIni = l8TrueColorLayers[modeMusim][tahunTerpilih].getEeObject();
+  var lstTahunIni = lstLayers[modeMusim][tahunTerpilih].getEeObject();
 
-  var citraGabungan = citraTahunIni.select(['B2','B3','B4','B5','B6','B7'])
+  // Nama band SR pada Collection 2 Level-2
+  var citraGabungan = citraTahunIni.select(['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7'])
     .addBands(lstTahunIni);
 
   citraGabungan.reduceRegion({
@@ -453,21 +570,18 @@ Map.onClick(function(coords) {
       return;
     }
 
+    var labelModeKlik = (modeMusim === 'kemarau') ? 'Musim Kemarau (Jun-Sep)' : 'Tahun Penuh (Jan-Des)';
     var teks =
-      'Tahun: ' + tahunTerpilih + '\n\n' +
+      'Tahun: ' + tahunTerpilih + ' (' + labelModeKlik + ')\n\n' +
       'LST: ' + hasil.LST_CELSIUS.toFixed(2) + ' °C\n\n' +
-      'Reflektansi (TOA):\n' +
-      '  B2 (Biru): ' + hasil.B2.toFixed(4) + '\n' +
-      '  B3 (Hijau): ' + hasil.B3.toFixed(4) + '\n' +
-      '  B4 (Merah): ' + hasil.B4.toFixed(4) + '\n' +
-      '  B5 (NIR): ' + hasil.B5.toFixed(4) + '\n' +
-      '  B6 (SWIR 1): ' + hasil.B6.toFixed(4) + '\n' +
-      '  B7 (SWIR 2): ' + hasil.B7.toFixed(4);
+      'Reflektansi Permukaan (SR):\n' +
+      '  B2 (Biru): ' + hasil.SR_B2.toFixed(4) + '\n' +
+      '  B3 (Hijau): ' + hasil.SR_B3.toFixed(4) + '\n' +
+      '  B4 (Merah): ' + hasil.SR_B4.toFixed(4) + '\n' +
+      '  B5 (NIR): ' + hasil.SR_B5.toFixed(4) + '\n' +
+      '  B6 (SWIR 1): ' + hasil.SR_B6.toFixed(4) + '\n' +
+      '  B7 (SWIR 2): ' + hasil.SR_B7.toFixed(4);
 
     clickContentLabel.setValue(teks);
   });
 });
-
-
-
-
