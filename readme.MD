@@ -1,7 +1,7 @@
 # WebGIS Analisis Land Surface Temperature (LST) Kota Bekasi
 
 ## Link Akses
-[WebGIS LST Kota Bekasi](https://windy-nation-484911-g8.projects.earthengine.app/view/webgis-lst-kota-bekasi)
+[WebGIS LST Kota Bekasi](https://windy-nation-484911-g8.projects.earthengine.app/view/webgislstbekasi)
 
 Peta interaktif berbasis Google Earth Engine (GEE) untuk memantau dan menganalisis tren **Land Surface Temperature (LST)** Kota Bekasi periode **2015–2025**, dilengkapi visual True Color, grafik tren, statistik per tahun, dan informasi titik interaktif.
 
