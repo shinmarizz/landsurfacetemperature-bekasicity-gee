@@ -107,7 +107,7 @@ README.md                 → Dokumentasi proyek ini
 ```
 
 ## Visualisasi 
-![Homepage](image.png)
+![alt text](image-1.png)
 
 Tampilan di atas menunjukkan layer LST tahun 2018, lengkap dengan panel kontrol layer (kiri atas), legenda gradien suhu (kiri bawah), panel informasi proyek (kanan atas), dan panel hasil klik peta yang menampilkan LST beserta nilai reflektansi TOA pada titik yang dipilih (kanan bawah).
 
