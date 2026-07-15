@@ -1,25 +1,11 @@
-// ============================================================
-// WebGIS LST Kota Bekasi 2015-2025
-// Versi: Landsat 8 Collection 2 Level-2 (Surface Reflectance)
-// LST dihitung dari band ST_B10 (Surface Temperature product resmi USGS,
-// sudah terkoreksi emisivitas menggunakan ASTER GED)
-// ============================================================
 
-// -------------------- BATAS ADMINISTRASI: FAO GAUL --------------------
-// Menggunakan FAO GAUL 2015 Level 2 sebagai sumber batas wilayah studi
-// (menggantikan asset geometry gambar manual).
 var gaulLevel2 = ee.FeatureCollection('FAO/GAUL/2015/level2');
 
-// Langkah verifikasi (jalankan sekali, cek di Console):
-// FAO GAUL sering tidak konsisten memakai prefix "Kota"/"Kabupaten",
-// jadi cek dulu semua fitur yang mengandung kata "Bekasi" sebelum fix nama final.
+
 var cekBekasi = gaulLevel2.filter(ee.Filter.stringContains('ADM2_NAME', 'Bekasi'));
 print('Cek penamaan wilayah "Bekasi" di FAO GAUL:', cekBekasi);
 
-// Ambil khusus Kota Bekasi (bukan Kabupaten Bekasi).
-// Jika print di atas menunjukkan nama berbeda (mis. hanya "Bekasi" tanpa
-// prefix "Kota"), sesuaikan filter ADM2_NAME di bawah ini, atau filter
-// berdasarkan ADM2_CODE yang muncul pada hasil print supaya lebih pasti.
+
 var kotaBekasi = gaulLevel2.filter(
   ee.Filter.and(
     ee.Filter.eq('ADM1_NAME', 'Jawa Barat'),
@@ -27,14 +13,12 @@ var kotaBekasi = gaulLevel2.filter(
   )
 );
 
-// geometry di sini menggantikan variabel geometry manual yang dipakai
-// di seluruh bagian script (filterBounds, clip, reduceRegion, dll).
+
 var geometry = kotaBekasi.geometry();
 
 Map.addLayer(kotaBekasi, {color: 'FF0000'}, 'Batas Kota Bekasi (FAO GAUL)', false);
 
-// -------------------- MASKING AWAN --------------------
-// Bit position sama untuk QA_PIXEL Collection 2 (TOA maupun L2/SR)
+
 function maskL8sr(citra) {
   var qa = citra.select('QA_PIXEL');
   var cloudBitMask = 1 << 3;
@@ -48,9 +32,7 @@ function maskL8sr(citra) {
   return citra.updateMask(mask);
 }
 
-// -------------------- SCALE FACTOR SR/ST --------------------
-// Wajib untuk Collection 2 Level-2: band optik (SR_B*) dan termal (ST_B10)
-// disimpan dalam bentuk integer sehingga perlu dikonversi ke nilai fisik.
+
 function applyScaleFactors(citra) {
   var opticalBands = citra.select('SR_B.').multiply(0.0000275).add(-0.2);
   var thermalBand = citra.select('ST_B10').multiply(0.00341802).add(149.0);
@@ -81,7 +63,7 @@ var lstVis = {
   ]
 };
 
-// Nama band berubah menjadi SR_B4, SR_B3, SR_B2 pada Collection 2 Level-2
+
 var l8Vis = {
   bands: ['SR_B4', 'SR_B3', 'SR_B2'],
   min: 0,
@@ -96,10 +78,7 @@ var s2Vis = {
   gamma: 1.1
 };
 
-// -------------------- AMBIL CITRA TAHUNAN (SR) --------------------
-// mode: 'penuh' = Januari-Desember, 'kemarau' = Juni-September
-// Musim kemarau dipakai supaya perbandingan LST antar-tahun lebih
-// apple-to-apple (tidak tercampur variasi musim hujan/kemarau).
+
 function ambilKoleksiTahun(tahun, mode) {
   var startDate, endDate;
   if (mode === 'kemarau') {
@@ -124,10 +103,7 @@ function ambilCitraTahun(tahun, mode) {
     .clip(geometry);
 }
 
-// -------------------- CEK JUMLAH CITRA VALID PER TAHUN --------------------
-// Median dari sedikit citra (mis. 2-3 scene) jauh lebih noisy/tidak
-// representatif dibanding median dari banyak citra. Ini penting dicatat
-// sebagai bagian kualitas data pada laporan/skripsi.
+
 print('=== Jumlah citra Landsat 8 SR valid per tahun (CLOUD_COVER < 20%) ===');
 var daftarTahunUntukCek = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 daftarTahunUntukCek.forEach(function(tahun) {
@@ -139,10 +115,7 @@ daftarTahunUntukCek.forEach(function(tahun) {
   );
 });
 
-// -------------------- HITUNG LST DARI PRODUK ST_B10 --------------------
-// ST_B10 pada Collection 2 Level-2 sudah berupa Surface Temperature (Kelvin)
-// hasil koreksi emisivitas resmi USGS, jadi tidak perlu lagi menghitung
-// NDVI -> PV -> emisivitas -> Planck secara manual seperti pada versi TOA.
+
 function hitungLST(dataset) {
   var lstKelvin = dataset.select('ST_B10');
   var lstCelsius = lstKelvin.subtract(273.15).rename('LST_CELSIUS');
@@ -151,9 +124,9 @@ function hitungLST(dataset) {
 
 var daftarTahun = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
 var tahunAktif = 2018;
-var modeMusim = 'penuh'; // 'penuh' (Jan-Des) atau 'kemarau' (Jun-Sep)
+var modeMusim = 'penuh'; 
 
-// Dictionary bersarang: l8TrueColorLayers[mode][tahun]
+
 var l8TrueColorLayers = {penuh: {}, kemarau: {}};
 var lstLayers = {penuh: {}, kemarau: {}};
 
@@ -162,7 +135,7 @@ var lstLayers = {penuh: {}, kemarau: {}};
     var citraTahun = ambilCitraTahun(tahun, mode);
     var lstTahun = hitungLST(citraTahun);
 
-    // Hanya tahun aktif + mode aktif yang langsung tampil di awal
+    
     var tampilkan = (tahun === tahunAktif && mode === modeMusim);
 
     var labelMode = (mode === 'kemarau') ? ' [Kemarau]' : ' [Tahun Penuh]';
@@ -263,11 +236,11 @@ var checkboxMusimKemarau = ui.Checkbox({
 
     var tahunTerpilih = yearSlider.getValue();
 
-    // Matikan layer mode sebelumnya untuk tahun yang sedang aktif
+    
     l8TrueColorLayers[modeSebelumnya][tahunTerpilih].setShown(false);
     lstLayers[modeSebelumnya][tahunTerpilih].setShown(false);
 
-    // Nyalakan layer mode baru sesuai status checkbox True Color / LST
+
     l8TrueColorLayers[modeMusim][tahunTerpilih].setShown(tampilkanTrueColor);
     lstLayers[modeMusim][tahunTerpilih].setShown(tampilkanLST);
 
@@ -356,7 +329,7 @@ legend.add(ui.Label('Sumber: Landsat 8 Collection 2 Level-2 SR (True Color & LST
 
 Map.add(legend);
 
-// -------------------- CHART TREN LST (dari ST_B10, sudah dalam °C) --------------------
+
 var lstCollection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
   .filterBounds(geometry)
   .filterDate('2015-01-01', '2025-12-31')
@@ -551,7 +524,7 @@ Map.onClick(function(coords) {
   var citraTahunIni = l8TrueColorLayers[modeMusim][tahunTerpilih].getEeObject();
   var lstTahunIni = lstLayers[modeMusim][tahunTerpilih].getEeObject();
 
-  // Nama band SR pada Collection 2 Level-2
+  
   var citraGabungan = citraTahunIni.select(['SR_B2','SR_B3','SR_B4','SR_B5','SR_B6','SR_B7'])
     .addBands(lstTahunIni);
 
